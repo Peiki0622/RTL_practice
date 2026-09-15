@@ -12,19 +12,23 @@
 
 ## 2. 目录边界
 
-每个练习目录遵循以下结构：
+每个练习目录必须遵循以下结构：
 
 ```text
 exercises/<exercise>/
 ├── README.md
+├── Makefile
 ├── golden/
-└── practice/
+├── practice/
+└── testbench/
 ```
 
-- `golden/`：Codex 编写参考实现、参考测试平台和必要说明的目录。
-- `practice/`：练习者本人编写代码的目录。
+- `golden/`：Codex 编写参考 RTL（寄存器传输级）实现和必要说明的目录。
+- `practice/`：练习者本人编写 RTL 的目录。
+- `testbench/`：`golden/` 与 `practice/` 共用的测试平台、波形转储逻辑和 Verdi（波形调试工具）回放脚本目录。
+- `Makefile`：该练习唯一允许的标准仿真入口。
 - 除非用户明确要求，Codex **不得修改、补全、格式化、重构或覆盖 `practice/` 中的任何 `.sv` 文件**。
-- Codex 默认只在 `golden/` 中生成参考答案。
+- Codex 默认只在 `golden/` 和 `testbench/` 中生成参考实现与验证环境。
 
 ## 3. 严禁使用 `function`
 
@@ -38,7 +42,7 @@ exercises/<exercise>/
 - 定义 `automatic function`；
 - 在 `module`、`interface`、`package`、`class` 或其他作用域中定义函数；
 - 调用自定义 SystemVerilog 函数；
-- 为了参数计算、编码转换、优先级选择、格雷码转换、地址计算、比较、饱和、裁剪等逻辑引入辅助函数。
+- 为参数计算、编码转换、优先级选择、格雷码转换、地址计算、比较、饱和、裁剪等逻辑引入辅助函数。
 
 例如，以下写法在本仓库中 **禁止**：
 
@@ -56,13 +60,13 @@ gray_next = (bin_next >> 1) ^ bin_next;
 
 ### 3.2 对测试平台同样生效
 
-`golden/` 中的测试平台也不得使用 `function`。如果需要复用测试流程，可在测试平台中使用少量、清晰的 `task`（任务），但不得用 `task` 隐藏被测设计核心行为或参考模型的关键逻辑。
+`testbench/` 中的 `.sv` 文件同样不得使用 `function`。如果需要复用测试流程，可使用少量、清晰的 `task`（任务），但不得用 `task` 隐藏被测设计核心行为或参考模型的关键逻辑。
 
 ## 4. RTL 编码风格
 
 ### 4.1 可综合性
 
-参考 RTL（寄存器传输级）实现必须可综合，且不得依赖厂商专有 IP（知识产权核）。
+参考 RTL 实现必须可综合，且不得依赖厂商专有 IP（知识产权核）。
 
 综合 RTL 中禁止：
 
@@ -142,8 +146,10 @@ CDC（跨时钟域）题必须体现正确的跨域结构，不得只为仿真�
 
 ## 9. 测试平台要求
 
-Codex 为 `golden/` 编写测试平台时：
+Codex 为每个练习编写测试平台时：
 
+- 测试平台统一放在 `testbench/`，并同时用于验证 `golden/` 与 `practice/`。
+- 测试平台顶层模块名统一为 `tb`，被测模块实例名统一为 `dut`。
 - 测试平台应自检，不只打印波形供人工观察。
 - 应覆盖 `README.md` 明确列出的边界条件和验收重点。
 - 失败时应给出明确的错误信息。
@@ -152,15 +158,63 @@ Codex 为 `golden/` 编写测试平台时：
 - 测试平台不得通过层次化强制修改被测模块内部状态来伪造通过结果。
 - 测试平台同样严禁使用 `function`。
 - 如需复用激励步骤，可使用简单 `task`，但保持测试逻辑易读。
+- 测试平台必须生成 FSDB（快速信号数据库）波形文件，文件名固定为当前仿真工作目录下的 `wave.fsdb`。
+- 波形至少应覆盖测试平台关键信号与 `dut` 的外部端口；必要时可增加少量关键内部状态，但不得依赖额外调试端口。
 
-## 10. Golden 参考答案文件约定
+## 10. VCS 与 Verdi 标准工作流
+
+Codex **不得自行直接调用 VCS（数字逻辑仿真工具）或 Verdi** 代替仓库标准命令。每个练习必须通过本目录 `Makefile` 的以下目标完成编译、仿真和波形查看：
+
+```text
+make vcs-golden
+make verdi-golden
+make vcs-practice
+make verdi-practice
+make clean
+```
+
+### 10.1 VCS 规则
+
+- `make vcs-golden`：只编译 `golden/*.sv` 与 `testbench/*.sv`，随后运行仿真。
+- `make vcs-practice`：只编译 `practice/*.sv` 与 `testbench/*.sv`，随后运行仿真。
+- 两种模式必须使用同一套 `testbench/`，不得维护两套行为不一致的测试平台。
+- Codex 在宣称某实现通过前，必须实际使用对应 `make vcs-*` 目标完成编译和自检仿真。
+- 任何 VCS 产生的中间文件、可执行文件、日志和波形必须位于练习目录的 `.sim/golden/` 或 `.sim/practice/` 下，不得散落到 `golden/`、`practice/`、`testbench/` 或练习根目录。
+- 若本地 VCS/Verdi 安装需要额外 PLI（编程语言接口）参数，允许通过 `VCS_EXTRA_FLAGS`、`VERDI_EXTRA_FLAGS` 等 Makefile 变量传入，但不得改写标准目标语义。
+
+### 10.2 Verdi 规则
+
+每个练习的 `testbench/` 必须包含 `verdi.tcl`，供两个 Verdi 目标共同使用。
+
+- `make verdi-golden` 必须先完成 golden 仿真，再用 `.sim/golden/wave.fsdb` 启动 Verdi GUI（图形界面）。
+- `make verdi-practice` 必须先完成 practice 仿真，再用 `.sim/practice/wave.fsdb` 启动 Verdi GUI。
+- 启动 Verdi 后，`verdi.tcl` 必须自动创建/打开波形窗口并添加当前练习中真实存在的关键信号，禁止只打开空波形窗口让用户手工逐个添加。
+- 波形窗口中的信号名必须与当前 `tb`/`dut` 的实际层次和端口一致，禁止复制其他练习的失效路径。
+- `verdi.tcl` 必须按信号类型分组并使用明显不同的颜色。至少区分：时钟/复位、握手/控制、地址/索引、数据总线、状态/标志、期望值/检查值（若存在）。
+- 建议颜色约定：时钟/复位为黄色，握手/控制为青色，地址/索引为橙色，数据为绿色，状态/标志为红色或橙红色，期望值/检查值为紫色。若具体 Verdi 版本的颜色名称不同，可选择语义接近且明显可区分的颜色。
+- Verdi 产生的日志、配置和其他工作区文件同样必须留在对应 `.sim/<variant>/` 目录中。
+
+### 10.3 清理规则
+
+- `make clean` 必须能够删除该练习所有 VCS/Verdi 仿真中间文件与结果文件。
+- Codex 完成一次练习的验证后，可以保留 `.sim/` 供用户观察；若任务要求清理，则必须运行 `make clean`。
+- 不得把工具生成物提交到 Git。
+
+## 11. Golden 参考答案文件约定
 
 默认建议每个 `golden/` 至少包含：
 
 ```text
 golden/
-├── <module_name>.sv
-└── tb_<module_name>.sv
+└── <module_name>.sv
+```
+
+测试平台统一放在：
+
+```text
+testbench/
+├── tb_<module_name>.sv
+└── verdi.tcl
 ```
 
 若题目确实需要多个 RTL 文件，可以拆分，但应保持文件数量最少，不得无意义拆模块。
@@ -175,7 +229,7 @@ golden/
 - 不在代码中留下未完成的 TODO（待办事项）；
 - 不使用 `function`。
 
-## 11. 提交前强制自检
+## 12. 提交前强制自检
 
 Codex 在提交或宣称完成前，必须逐项确认：
 
@@ -189,15 +243,20 @@ Codex 在提交或宣称完成前，必须逐项确认：
 8. 组合逻辑是否覆盖所有赋值路径；
 9. 边界条件是否全部处理；
 10. 测试平台是否真正检查功能而不是只生成波形；
-11. 是否为了方便私自改变题目语义；
-12. 是否能够用简单硬件结构解释当前实现。
+11. 是否使用对应 `make vcs-golden` 或 `make vcs-practice` 完成真实编译与仿真；
+12. 是否生成 `.sim/<variant>/wave.fsdb`；
+13. `testbench/verdi.tcl` 是否能自动显示并按类型着色当前练习的实际信号；
+14. 是否有任何仿真产物散落在 `.sim/` 之外；
+15. 是否为了方便私自改变题目语义；
+16. 是否能够用简单硬件结构解释当前实现。
 
 若任一项不满足，不得将任务标记为完成。
 
-## 12. 最重要的三条
+## 13. 最重要的四条
 
-如果只能记住三条，必须遵守：
+如果只能记住四条，必须遵守：
 
 1. **严格按照每题 `README.md` 的冻结规格和最小端口实现。**
 2. **任何 `.sv` 文件都严禁定义或使用自定义 `function`。**
-3. **除非用户明确要求，绝不修改 `practice/`；Codex 的参考答案只写入 `golden/`。**
+3. **除非用户明确要求，绝不修改 `practice/`；Codex 的参考 RTL 只写入 `golden/`。**
+4. **所有编译、仿真、Verdi 波形查看必须走本题 Makefile 的标准目标，并把所有工具产物限制在 `.sim/` 中。**
