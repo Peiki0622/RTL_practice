@@ -1,0 +1,34 @@
+# Per-exercise VCS/Verdi build and waveform directories.
+# The standard Makefiles place golden and practice runs under .sim/.
+**/.sim/
+
+# VCS compile and simulation products that may be left beside an exercise.
+**/csrc/
+**/simv
+**/simv.daidir/
+**/simv.kdb/
+**/*.daidir/
+**/*.vdb/
+**/DVEfiles/
+**/ucli.key
+**/vcs.key
+**/vc_hdrs.h
+
+# Verdi/Novas session state.
+**/verdiLog/
+**/nWaveLog/
+**/novas.conf
+**/novas.rc
+**/novas_dump.log
+
+# Generated waveforms and the named logs emitted by the standard flow.
+**/*.fsdb
+**/*.fsdb.*
+**/*.vpd
+**/*.vcd
+**/*.vcd.gz
+**/vcs_compile.log
+**/vcs_sim.log
+**/vcs.log
+**/compile.log
+**/sim.log
